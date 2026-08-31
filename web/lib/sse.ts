@@ -5,8 +5,18 @@
  * server instances can fan out the same event stream without each one hammering the DB.
  */
 const POLL_MS = 2000;
+const BATCH_LIMIT = 50;
 
-export function createPollingSSEStream<T>(fetchNew: (sinceId: number) => Promise<{ id: number; row: T }[]>) {
+export function createPollingSSEStream<T>(
+  /** Returns up to BATCH_LIMIT rows with id > sinceId, oldest first. Must be ascending: a
+   *  descending/newest-first batch would let a burst of more than BATCH_LIMIT rows in one poll
+   *  window permanently skip everything between sinceId and (newest - BATCH_LIMIT), since the
+   *  next poll only ever looks forward from the highest id it has seen. */
+  fetchNew: (sinceId: number) => Promise<{ id: number; row: T }[]>,
+  /** Returns the current highest id (0 if the table is empty), used only to prime the stream so
+   *  a newly-connected client doesn't get flooded with the entire history. */
+  getLatestId: () => Promise<number>
+) {
   const encoder = new TextEncoder();
   let closed = false;
 
@@ -29,9 +39,7 @@ export function createPollingSSEStream<T>(fetchNew: (sinceId: number) => Promise
         if (!closed) setTimeout(tick, POLL_MS);
       };
 
-      // Prime lastId to "now" so we only stream genuinely new rows.
-      const initial = await fetchNew(0);
-      lastId = initial.reduce((max, r) => Math.max(max, r.id), 0);
+      lastId = await getLatestId();
       setTimeout(tick, POLL_MS);
     },
     cancel() {
@@ -47,3 +55,5 @@ export function createPollingSSEStream<T>(fetchNew: (sinceId: number) => Promise
     },
   });
 }
+
+export const SSE_BATCH_LIMIT = BATCH_LIMIT;

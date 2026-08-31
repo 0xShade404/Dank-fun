@@ -251,6 +251,30 @@ describe("BondingCurveMarket", function () {
     ).to.be.reverted;
   });
 
+  it("rejects migrateLiquidity from a contract that only self-reports the trusted factory address", async function () {
+    // Regression test for a real bug: migrateLiquidity used to authorize callers by asking
+    // msg.sender.factory() and trusting whatever it returned, which any contract can fake.
+    const { liquidityManager, factory, buyer } = await deployProtocol();
+
+    const Malicious = await ethers.getContractFactory("MaliciousFactoryReporter");
+    const malicious = await Malicious.deploy(await factory.getAddress());
+
+    await expect(
+      malicious.connect(buyer).attack(await liquidityManager.getAddress(), buyer.address, 0, 0)
+    ).to.be.revertedWithCustomError(liquidityManager, "NotAuthorizedMarket");
+  });
+
+  it("authorizes a market only via DankFactory's own authorizeMarket call", async function () {
+    const { factory, liquidityManager, creator } = await deployProtocol();
+    const { market } = await createToken(factory, creator);
+
+    expect(await liquidityManager.authorizedMarkets(await market.getAddress())).to.equal(true);
+
+    await expect(
+      liquidityManager.connect(creator).authorizeMarket(creator.address)
+    ).to.be.revertedWithCustomError(liquidityManager, "NotFactory");
+  });
+
   it("only the market's owner (protocol admin) can pause trading", async function () {
     const { factory, creator, buyer } = await deployProtocol();
     const { market } = await createToken(factory, creator);
@@ -258,5 +282,35 @@ describe("BondingCurveMarket", function () {
       market,
       "OwnableUnauthorizedAccount"
     );
+  });
+});
+
+describe("BondingCurve rounding", function () {
+  // Regression tests for a real bug: quoteSell used to reuse the same always-round-up integral
+  // as quoteBuy, so sell payouts rounded in the seller's favor instead of down.
+  async function deployHarness() {
+    const Harness = await ethers.getContractFactory("BondingCurveHarness");
+    return Harness.deploy();
+  }
+
+  it("floors sell payouts instead of rounding them up", async function () {
+    const harness = await deployHarness();
+    const basePrice = 0n;
+    const slope = 3n;
+    const sold = ethers.parseUnits("1", 18); // 1 whole token sold so far
+    const sellAmount = ethers.parseUnits("1", 18); // sell all of it: s0=0, s1=1
+
+    // True continuous integral is slope*(1^2-0^2)/2 = 1.5. Flooring (protocol-favoring) must
+    // give 1, not 2 -- 2 is what the pre-fix code returned.
+    expect(await harness.quoteSell(basePrice, slope, sold, sellAmount)).to.equal(1n);
+  });
+
+  it("still rounds buy costs up (protocol-favoring, unchanged by the fix)", async function () {
+    const harness = await deployHarness();
+    const basePrice = 0n;
+    const slope = 3n;
+
+    // Same 1.5 continuous integral, but buys must still ceil to 2.
+    expect(await harness.quoteBuy(basePrice, slope, 0n, ethers.parseUnits("1", 18))).to.equal(2n);
   });
 });

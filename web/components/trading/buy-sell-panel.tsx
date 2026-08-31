@@ -105,15 +105,19 @@ export function BuySellPanel({
   const sellNetPayout = (sellQuote.data as readonly [bigint, bigint, bigint] | undefined)?.[2];
 
   async function handleSubmit() {
+    let succeeded: boolean;
     if (side === "buy") {
       if (!buyTotalCost || estimatedTokensForBuy <= 0n) return;
       const maxNativeIn = (buyTotalCost * BigInt(10_000 + slippageBps)) / 10_000n;
-      await trade.buy(estimatedTokensForBuy, maxNativeIn);
+      succeeded = await trade.buy(estimatedTokensForBuy, maxNativeIn);
     } else {
       if (!sellNetPayout || parsedTokenIn <= 0n) return;
       const minNativeOut = (sellNetPayout * BigInt(10_000 - slippageBps)) / 10_000n;
-      await trade.sell(parsedTokenIn, minNativeOut, (allowance.data as bigint | undefined) ?? 0n);
+      succeeded = await trade.sell(parsedTokenIn, minNativeOut, (allowance.data as bigint | undefined) ?? 0n);
     }
+    // On failure, leave the error message and typed amount on screen instead of silently
+    // wiping them -- trade.error is already populated for display below.
+    if (!succeeded) return;
     setAmount("");
     trade.reset();
     buyQuote.refetch();

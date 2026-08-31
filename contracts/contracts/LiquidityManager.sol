@@ -7,10 +7,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {ILiquidityManager} from "./ILiquidityManager.sol";
 
-interface IBondingCurveMarketFactory {
-    function factory() external view returns (address);
-}
-
 /// @title LiquidityManager
 /// @notice MVP graduation target for BondingCurveMarket. Holds the migrated token + native
 ///         liquidity for a graduated token in escrow and emits the events the indexer needs.
@@ -29,23 +25,32 @@ contract LiquidityManager is ILiquidityManager, Ownable, ReentrancyGuard {
         bool withdrawn;
     }
 
-    /// @notice The DankFactory address whose deployed BondingCurveMarket instances are trusted
-    ///          to call migrateLiquidity. Set once, after both contracts exist (see deploy
-    ///          script), which avoids a constructor-time circular dependency between the two.
+    /// @notice The DankFactory address allowed to authorize new markets. Set once, after both
+    ///          contracts exist (see deploy script), which avoids a constructor-time circular
+    ///          dependency between the two.
     address public factory;
+
+    /// @notice Markets DankFactory has actually deployed and vouched for via authorizeMarket.
+    ///          This is the real authorization record -- migrateLiquidity trusts *this*, never a
+    ///          value a caller reports about itself (a self-reported `factory()` claim can be
+    ///          implemented by any contract, authorized or not).
+    mapping(address => bool) public authorizedMarkets;
 
     mapping(address => MigratedLiquidity) public migratedLiquidityOf;
 
     event FactorySet(address indexed factory);
+    event MarketAuthorized(address indexed market);
     event LiquidityMigrated(address indexed token, address indexed market, uint256 tokenAmount, uint256 nativeAmount);
     event LiquidityWithdrawn(address indexed token, address indexed to, uint256 tokenAmount, uint256 nativeAmount);
 
     error NotAuthorizedMarket();
+    error NotFactory();
     error AlreadyMigrated();
     error AlreadyWithdrawn();
     error NothingToWithdraw();
     error NativeMismatch();
     error FactoryAlreadySet();
+    error ZeroAddress();
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -53,9 +58,18 @@ contract LiquidityManager is ILiquidityManager, Ownable, ReentrancyGuard {
     ///         after DankFactory is deployed with this contract's address.
     function setFactory(address factory_) external onlyOwner {
         if (factory != address(0)) revert FactoryAlreadySet();
-        if (factory_ == address(0)) revert NotAuthorizedMarket();
+        if (factory_ == address(0)) revert ZeroAddress();
         factory = factory_;
         emit FactorySet(factory_);
+    }
+
+    /// @notice Called once per token by DankFactory immediately after it deploys that token's
+    ///         BondingCurveMarket, so authorization comes from the factory's own deployment
+    ///         record instead of anything the market (or an impersonator) claims about itself.
+    function authorizeMarket(address market) external {
+        if (msg.sender != factory) revert NotFactory();
+        authorizedMarkets[market] = true;
+        emit MarketAuthorized(market);
     }
 
     /// @inheritdoc ILiquidityManager
@@ -64,9 +78,7 @@ contract LiquidityManager is ILiquidityManager, Ownable, ReentrancyGuard {
         uint256 tokenAmount,
         uint256 nativeAmount
     ) external payable override nonReentrant {
-        if (factory == address(0) || IBondingCurveMarketFactory(msg.sender).factory() != factory) {
-            revert NotAuthorizedMarket();
-        }
+        if (!authorizedMarkets[msg.sender]) revert NotAuthorizedMarket();
         if (msg.value != nativeAmount) revert NativeMismatch();
         if (migratedLiquidityOf[token].tokenAmount != 0 || migratedLiquidityOf[token].nativeAmount != 0) {
             revert AlreadyMigrated();

@@ -6,7 +6,10 @@ import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {DankToken} from "./DankToken.sol";
 import {BondingCurveMarket} from "./BondingCurveMarket.sol";
-import {ILiquidityManager} from "./ILiquidityManager.sol";
+
+interface ILiquidityManagerAuthorize {
+    function authorizeMarket(address market) external;
+}
 
 /// @title DankFactory
 /// @notice Single entry point for creating standardized DRC-20 memecoins. Every token created
@@ -163,6 +166,9 @@ contract DankFactory is Ownable, Pausable, ReentrancyGuard {
         );
 
         newMarket.initialize(address(newToken));
+        // Authorization comes from this call -- the factory's own deployment record -- not
+        // anything the market claims about itself (see LiquidityManager.authorizeMarket).
+        ILiquidityManagerAuthorize(liquidityManager).authorizeMarket(address(newMarket));
 
         token = address(newToken);
         market = address(newMarket);

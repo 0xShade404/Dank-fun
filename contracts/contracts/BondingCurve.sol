@@ -33,7 +33,7 @@ library BondingCurve {
             s1 += 1;
         }
 
-        cost = _integralCost(basePrice, slope, s0, s1);
+        cost = _integralCost(basePrice, slope, s0, s1, true);
 
         // Round the buyer's cost up in the protocol's favor.
         if (cost == 0 && tokenAmount > 0) {
@@ -55,22 +55,25 @@ library BondingCurve {
         uint256 s1 = soldTokenAmount / WAD;
         uint256 s0 = (soldTokenAmount - tokenAmount) / WAD;
 
-        payout = _integralCost(basePrice, slope, s0, s1);
-        // Payout already rounds down naturally via integer division below.
+        // Floor the payout so the curve never pays out more than the continuous integral.
+        payout = _integralCost(basePrice, slope, s0, s1, false);
     }
 
     /// @dev cost = basePrice * (s1 - s0) + slope * (s1^2 - s0^2) / 2, computed without
-    ///      intermediate underflow, rounding the division up.
+    ///      intermediate underflow. `roundUp` controls which way the quadratic term's integer
+    ///      division rounds: true for buy costs (protocol never undercharges), false for sell
+    ///      payouts (protocol never overpays) -- both directions favor the protocol/curve.
     function _integralCost(
         uint256 basePrice,
         uint256 slope,
         uint256 s0,
-        uint256 s1
+        uint256 s1,
+        bool roundUp
     ) private pure returns (uint256) {
         uint256 linear = basePrice * (s1 - s0);
         uint256 quadraticNumerator = slope * ((s1 * s1) - (s0 * s0));
         uint256 quadratic = quadraticNumerator / 2;
-        if (quadraticNumerator % 2 != 0) {
+        if (roundUp && quadraticNumerator % 2 != 0) {
             quadratic += 1;
         }
         return linear + quadratic;

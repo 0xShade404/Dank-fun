@@ -20,8 +20,12 @@ export function useTrade(marketAddress: `0x${string}`, tokenAddress: `0x${string
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string | null>(null);
 
+  // Both return whether the trade actually succeeded, computed synchronously within this same
+  // call rather than left for the caller to infer from `step`/`error` after the fact -- reading
+  // those from an event-handler closure after an `await` can observe a stale pre-call snapshot,
+  // since this hook's state only updates on the *next* render.
   const buy = useCallback(
-    async (tokenAmount: bigint, maxNativeIn: bigint) => {
+    async (tokenAmount: bigint, maxNativeIn: bigint): Promise<boolean> => {
       setError(null);
       try {
         setStep("awaiting-signature");
@@ -37,17 +41,19 @@ export function useTrade(marketAddress: `0x${string}`, tokenAddress: `0x${string
         setStep("syncing");
         await syncTx(txHash);
         setStep("done");
+        return true;
       } catch (err) {
         console.error(err);
         setError(readableError(err));
         setStep("error");
+        return false;
       }
     },
     [marketAddress, publicClient, writeContractAsync]
   );
 
   const sell = useCallback(
-    async (tokenAmount: bigint, minNativeOut: bigint, currentAllowance: bigint) => {
+    async (tokenAmount: bigint, minNativeOut: bigint, currentAllowance: bigint): Promise<boolean> => {
       setError(null);
       try {
         if (currentAllowance < tokenAmount) {
@@ -73,10 +79,12 @@ export function useTrade(marketAddress: `0x${string}`, tokenAddress: `0x${string
         setStep("syncing");
         await syncTx(txHash);
         setStep("done");
+        return true;
       } catch (err) {
         console.error(err);
         setError(readableError(err));
         setStep("error");
+        return false;
       }
     },
     [marketAddress, tokenAddress, publicClient, writeContractAsync]
