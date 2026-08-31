@@ -1,25 +1,19 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import fs from "node:fs";
-import path from "node:path";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import * as schema from "./schema";
 
-const DATABASE_PATH = process.env.DATABASE_PATH ?? "./data/dank.db";
-
-fs.mkdirSync(path.dirname(DATABASE_PATH), { recursive: true });
+const connectionString = process.env.DATABASE_URL ?? "postgresql://localhost:5432/dank_fun";
 
 declare global {
-  var __dankSqlite: Database.Database | undefined;
+  var __dankPool: Pool | undefined;
 }
 
-// Reuse a single connection across hot-reloads in dev.
-const sqlite = global.__dankSqlite ?? new Database(DATABASE_PATH);
-if (process.env.NODE_ENV !== "production") {
-  global.__dankSqlite = sqlite;
-}
+export const pool = global.__dankPool ?? new Pool({
+  connectionString,
+  max: Number(process.env.DATABASE_POOL_MAX ?? 10),
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
+});
+if (process.env.NODE_ENV !== "production") global.__dankPool = pool;
 
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-
-export const db = drizzle(sqlite, { schema });
-export { sqlite };
+export const db = drizzle(pool, { schema });

@@ -1,49 +1,42 @@
-import { hardhat } from "viem/chains";
 import type { Chain } from "viem";
 
-/**
- * Chain + contract wiring for the dApp.
- *
- * This MVP targets a local Hardhat chain (id 31337) by default, matching the contracts
- * package's `npm run deploy:local`. To point at a real DRC-20 / EVM-compatible testnet or
- * mainnet, set NEXT_PUBLIC_CHAIN_ID / NEXT_PUBLIC_RPC_URL / NEXT_PUBLIC_FACTORY_ADDRESS /
- * NEXT_PUBLIC_LIQUIDITY_MANAGER_ADDRESS and redeploy the contracts package there first.
- */
+function configuredEnv(name: string, fallback: string): string {
+  return process.env[name]?.trim() || fallback;
+}
 
-const DEFAULT_FACTORY_ADDRESS = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as const;
-const DEFAULT_LIQUIDITY_MANAGER_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3" as const;
+export function validateDogechainConfig() {
+  const required = ["NEXT_PUBLIC_RPC_URL", "NEXT_PUBLIC_FACTORY_ADDRESS", "NEXT_PUBLIC_LIQUIDITY_MANAGER_ADDRESS"];
+  const missing = required.filter((name) => !process.env[name]?.trim());
+  if (missing.length) throw new Error(`Missing Dogechain configuration: ${missing.join(", ")}`);
+}
 
-export const FACTORY_ADDRESS = (process.env.NEXT_PUBLIC_FACTORY_ADDRESS ??
-  DEFAULT_FACTORY_ADDRESS) as `0x${string}`;
+const chainId = Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? 2000);
+if (!Number.isInteger(chainId) || chainId <= 0) throw new Error("NEXT_PUBLIC_CHAIN_ID must be a positive integer");
 
-export const LIQUIDITY_MANAGER_ADDRESS = (process.env.NEXT_PUBLIC_LIQUIDITY_MANAGER_ADDRESS ??
-  DEFAULT_LIQUIDITY_MANAGER_ADDRESS) as `0x${string}`;
-
-export const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL ?? "http://127.0.0.1:8545";
+export const RPC_URL = configuredEnv("NEXT_PUBLIC_RPC_URL", "http://127.0.0.1:8545");
+export const FACTORY_ADDRESS = configuredEnv("NEXT_PUBLIC_FACTORY_ADDRESS", "0x0000000000000000000000000000000000000000") as `0x${string}`;
+export const LIQUIDITY_MANAGER_ADDRESS = configuredEnv("NEXT_PUBLIC_LIQUIDITY_MANAGER_ADDRESS", "0x0000000000000000000000000000000000000000") as `0x${string}`;
+export const EXPLORER_URL = (process.env.NEXT_PUBLIC_EXPLORER_URL ?? "https://explorer.dogechain.dog").replace(/\/$/, "");
 
 export const appChain: Chain = {
-  ...hardhat,
-  id: Number(process.env.NEXT_PUBLIC_CHAIN_ID ?? hardhat.id),
-  rpcUrls: {
-    default: { http: [RPC_URL] },
-  },
-};
+  id: chainId,
+  name: chainId === 20001 ? "Dogechain Testnet" : "Dogechain",
+  nativeCurrency: { name: "WDOGE", symbol: "WDOGE", decimals: 18 },
+  rpcUrls: { default: { http: [RPC_URL] } },
+  blockExplorers: { default: { name: "Dogechain Explorer", url: EXPLORER_URL } },
+} as const;
 
-/**
- * Protocol-standardized curve defaults. These MUST match `contracts/scripts/deploy.js` for the
- * network this app is pointed at -- they're used only for client-side quote *previews* (instant
- * feedback while typing) and demo-data seeding. Every real trade re-fetches the authoritative
- * quote from the deployed BondingCurveMarket contract before submission; nothing here is trusted
- * for settlement.
- */
 export const CURVE_DEFAULTS = {
-  creationFeeWei: 10_000_000_000_000_000n, // 0.01 native
-  basePrice: 1_500_000_000n, // wei per whole token at sold = 0
-  slope: 90n, // wei per whole token, per whole token sold
-  curveSupplyCap: 800_000_000n * 10n ** 18n, // 800M tokens, 18 decimals
-  graduationReserve: 200_000_000n * 10n ** 18n, // 200M tokens, 18 decimals
-  protocolFeeBps: 100n, // 1%
+  creationFeeWei: 10_000_000_000_000_000n,
+  basePrice: 1_500_000_000n,
+  slope: 90n,
+  curveSupplyCap: 800_000_000n * 10n ** 18n,
+  graduationReserve: 200_000_000n * 10n ** 18n,
+  protocolFeeBps: 100n,
 } as const;
 
 export const TOTAL_SUPPLY = CURVE_DEFAULTS.curveSupplyCap + CURVE_DEFAULTS.graduationReserve;
 export const WAD = 10n ** 18n;
+
+export function explorerTxUrl(hash: string) { return `${EXPLORER_URL}/tx/${hash}`; }
+export function explorerAddressUrl(address: string) { return `${EXPLORER_URL}/address/${address}`; }

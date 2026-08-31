@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { pgTable, pgEnum, text, integer, serial, boolean, doublePrecision, index, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
  * SQLite (via Drizzle) stands in for this MVP's Postgres + Redis indexing layer (see
@@ -13,7 +13,7 @@ import { sqliteTable, text, integer, real, index, uniqueIndex } from "drizzle-or
  * name/image/description/socials the creator entered without needing a separate IPFS fetch in
  * this MVP. Swap this whole flow for real IPFS/Arweave storage in production (see docs).
  */
-export const tokenDrafts = sqliteTable("token_drafts", {
+export const tokenDrafts = pgTable("token_drafts", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   symbol: text("symbol").notNull(),
@@ -27,7 +27,7 @@ export const tokenDrafts = sqliteTable("token_drafts", {
   consumedAt: integer("consumed_at"),
 });
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   address: text("address").primaryKey(), // lowercase 0x address
   nonce: text("nonce").notNull(),
   createdAt: integer("created_at").notNull(),
@@ -46,7 +46,7 @@ export const users = sqliteTable("users", {
   profileUpdatedAt: integer("profile_updated_at"),
 });
 
-export const tokens = sqliteTable(
+export const tokens = pgTable(
   "tokens",
   {
     address: text("address").primaryKey(), // lowercase 0x address of the DankToken
@@ -72,7 +72,7 @@ export const tokens = sqliteTable(
     // Live curve state, kept in sync with on-chain state by the sync routes.
     sold: text("sold").notNull().default("0"),
     reserveBalance: text("reserve_balance").notNull().default("0"),
-    graduated: integer("graduated", { mode: "boolean" }).notNull().default(false),
+    graduated: boolean("graduated").notNull().default(false),
     graduatedAt: integer("graduated_at"),
 
     createdAt: integer("created_at").notNull(),
@@ -86,15 +86,18 @@ export const tokens = sqliteTable(
   ]
 );
 
-export const trades = sqliteTable(
+export const tradeSide = pgEnum("trade_side", ["buy", "sell"]);
+export const alertType = pgEnum("alert_type", ["new_token", "first_buy", "large_buy", "large_sell", "rapid_volume", "graduation", "liquidity_migrated"]);
+
+export const trades = pgTable(
   "trades",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     tokenAddress: text("token_address").notNull(),
     txHash: text("tx_hash").notNull(),
     logIndex: integer("log_index").notNull(),
     trader: text("trader").notNull(),
-    side: text("side", { enum: ["buy", "sell"] }).notNull(),
+    side: tradeSide("side").notNull(),
     tokenAmount: text("token_amount").notNull(), // bigint as string, 18 decimals
     nativeAmount: text("native_amount").notNull(), // bigint as string, wei
     fee: text("fee").notNull(),
@@ -110,7 +113,7 @@ export const trades = sqliteTable(
   ]
 );
 
-export const holders = sqliteTable(
+export const holders = pgTable(
   "holders",
   {
     tokenAddress: text("token_address").notNull(),
@@ -124,8 +127,8 @@ export const holders = sqliteTable(
   ]
 );
 
-export const liquidityEvents = sqliteTable("liquidity_events", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const liquidityEvents = pgTable("liquidity_events", {
+  id: serial("id").primaryKey(),
   tokenAddress: text("token_address").notNull(),
   txHash: text("tx_hash").notNull(),
   nativeAmount: text("native_amount").notNull(),
@@ -133,36 +136,33 @@ export const liquidityEvents = sqliteTable("liquidity_events", {
   timestamp: integer("timestamp").notNull(),
 });
 
-export const curveSnapshots = sqliteTable(
+export const curveSnapshots = pgTable(
   "curve_snapshots",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     tokenAddress: text("token_address").notNull(),
     timestamp: integer("timestamp").notNull(),
     sold: text("sold").notNull(),
     spotPrice: text("spot_price").notNull(),
     nativeRaised: text("native_raised").notNull(),
-    marketCapNative: real("market_cap_native").notNull(),
+    marketCapNative: doublePrecision("market_cap_native").notNull(),
   },
   (table) => [index("curve_snapshots_token_idx").on(table.tokenAddress, table.timestamp)]
 );
 
-export const alerts = sqliteTable(
+export const indexerState = pgTable("indexer_state", {
+  id: text("id").primaryKey(),
+  nextBlock: integer("next_block").notNull(),
+  lastProcessedHash: text("last_processed_hash"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const alerts = pgTable(
   "alerts",
   {
-    id: integer("id").primaryKey({ autoIncrement: true }),
+    id: serial("id").primaryKey(),
     tokenAddress: text("token_address").notNull(),
-    type: text("type", {
-      enum: [
-        "new_token",
-        "first_buy",
-        "large_buy",
-        "large_sell",
-        "rapid_volume",
-        "graduation",
-        "liquidity_migrated",
-      ],
-    }).notNull(),
+    type: alertType("type").notNull(),
     message: text("message").notNull(),
     payload: text("payload"), // JSON string
     createdAt: integer("created_at").notNull(),
