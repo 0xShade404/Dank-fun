@@ -32,6 +32,13 @@ pass) and is never a source of truth.
   live quote refresh, live curve-progress/stats polling, an SSE trade feed and SSE alert feed.
 - **Alerts**: generated synchronously off decoded on-chain events (new token, first buy, large
   buy/sell, rapid volume, graduation, liquidity migration) — see `lib/chain/sync.ts`.
+- **User profiles** (`/profile/[address]`): portfolio + PnL computed by replaying a wallet's
+  indexed trades with average-cost-basis accounting (`lib/db/profile.ts`), creator stats reusing
+  the same queries as `/creator` and the leaderboard, and badges computed live from that data
+  (`lib/badges.ts` — no separate badges table). Display name/avatar/bio/socials are the only
+  editable fields, gated by the signed session cookie so a wallet can only ever edit its own
+  profile (`app/api/profile/route.ts` takes no address in the body — it always writes to
+  whichever wallet the session proves ownership of).
 
 ## What's simplified for this MVP (and the production swap-in)
 

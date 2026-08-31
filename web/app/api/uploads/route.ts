@@ -1,20 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { db } from "@/lib/db/client";
 import { tokenDrafts } from "@/lib/db/schema";
 import { getSessionAddress } from "@/lib/auth";
 import { isAddress } from "viem";
-
-const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3MB
-const ALLOWED_MIME: Record<string, string> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/gif": "gif",
-  "image/webp": "webp",
-};
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
+import { saveUploadedImage, ImageUploadError } from "@/lib/image-upload";
 
 /**
  * Stores the token image + off-chain metadata a creator enters in /create, BEFORE the on-chain
@@ -49,18 +39,14 @@ export async function POST(request: NextRequest) {
 
   let imageUrl: string | null = null;
   if (image instanceof File) {
-    if (image.size > MAX_IMAGE_BYTES) {
-      return NextResponse.json({ error: "Image too large (max 3MB)" }, { status: 400 });
+    try {
+      imageUrl = await saveUploadedImage(image);
+    } catch (err) {
+      if (err instanceof ImageUploadError) {
+        return NextResponse.json({ error: err.message }, { status: 400 });
+      }
+      throw err;
     }
-    const ext = ALLOWED_MIME[image.type];
-    if (!ext) {
-      return NextResponse.json({ error: "Unsupported image type (png/jpeg/gif/webp only)" }, { status: 400 });
-    }
-    await fs.mkdir(UPLOAD_DIR, { recursive: true });
-    const filename = `${randomUUID()}.${ext}`;
-    const bytes = Buffer.from(await image.arrayBuffer());
-    await fs.writeFile(path.join(UPLOAD_DIR, filename), bytes);
-    imageUrl = `/uploads/${filename}`;
   }
 
   const draftId = randomUUID();

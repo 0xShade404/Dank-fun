@@ -25,12 +25,23 @@ export function formatCompactNative(wei: bigint | string): string {
   return `${value.toFixed(6)} ${NATIVE_SYMBOL}`;
 }
 
+/** Signed variant for PnL display -- compacts by magnitude regardless of sign, always shows +/-. */
+export function formatSignedCompactNative(wei: bigint | string): string {
+  const raw = typeof wei === "string" ? BigInt(wei) : wei;
+  const sign = raw < 0n ? "-" : "+";
+  return `${sign}${formatCompactNative(raw < 0n ? -raw : raw)}`;
+}
+
 export function bpsToPercent(bps: number, decimals = 1): string {
   return `${(bps / 100).toFixed(decimals)}%`;
 }
 
 export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+export function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
 }
 
 export function relativeTime(unixSeconds: number): string {

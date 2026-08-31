@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getTokenByAddress,
@@ -70,7 +71,11 @@ export default async function TokenPage({ params }: { params: Promise<{ address:
             )}
           </div>
           <p className="mt-1 text-xs text-neutral-500">
-            created by {shortAddress(token.creatorAddress)} · {relativeTime(token.createdAt)}
+            created by{" "}
+            <Link href={`/profile/${token.creatorAddress}`} className="text-neutral-400 hover:text-lime-400">
+              {shortAddress(token.creatorAddress)}
+            </Link>{" "}
+            · {relativeTime(token.createdAt)}
           </p>
           {token.description && <p className="mt-3 max-w-2xl text-sm text-neutral-300">{token.description}</p>}
 

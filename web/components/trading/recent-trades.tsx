@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { formatCompactNative, formatTokenAmount, relativeTime, shortAddress } from "@/lib/format";
 import type { TradeRow } from "@/lib/db/queries";
 
@@ -35,7 +36,9 @@ export function RecentTrades({ tokenAddress, initialTrades }: { tokenAddress: st
             >
               {trade.side.toUpperCase()}
             </span>
-            <span className="text-neutral-400">{shortAddress(trade.trader)}</span>
+            <Link href={`/profile/${trade.trader}`} className="text-neutral-400 hover:text-lime-400">
+              {shortAddress(trade.trader)}
+            </Link>
           </div>
           <span className="text-neutral-300">{formatTokenAmount(trade.tokenAmount)}</span>
           <span className="text-neutral-300">{formatCompactNative(trade.nativeAmount)}</span>

@@ -32,6 +32,18 @@ export const users = sqliteTable("users", {
   nonce: text("nonce").notNull(),
   createdAt: integer("created_at").notNull(),
   lastLoginAt: integer("last_login_at"),
+
+  // Profile fields. All optional -- a wallet has a usable profile (portfolio, creator stats,
+  // badges) the moment it trades or creates a token, with zero setup. These are the only
+  // fields a wallet can edit about itself, and only after proving ownership via the signed
+  // session cookie (see app/api/profile/route.ts).
+  displayName: text("display_name"),
+  avatarUrl: text("avatar_url"),
+  bio: text("bio"),
+  twitter: text("twitter"),
+  telegram: text("telegram"),
+  website: text("website"),
+  profileUpdatedAt: integer("profile_updated_at"),
 });
 
 export const tokens = sqliteTable(

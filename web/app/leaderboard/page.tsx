@@ -40,14 +40,18 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
 
         {category === "creator_volume"
           ? (rows as { creator: string; volume24h: string; tokenCount: number }[]).map((row, i) => (
-              <div key={row.creator} className="flex items-center justify-between border-b border-neutral-900 bg-neutral-900/40 px-4 py-3 text-sm last:border-0">
+              <Link
+                key={row.creator}
+                href={`/profile/${row.creator}`}
+                className="flex items-center justify-between border-b border-neutral-900 bg-neutral-900/40 px-4 py-3 text-sm last:border-0 hover:bg-neutral-900"
+              >
                 <div className="flex items-center gap-3">
                   <span className="w-6 text-neutral-600">#{i + 1}</span>
                   <span className="font-mono text-neutral-200">{shortAddress(row.creator)}</span>
                   <span className="text-xs text-neutral-500">{row.tokenCount} token{row.tokenCount === 1 ? "" : "s"}</span>
                 </div>
                 <span className="font-semibold text-neutral-100">{formatCompactNative(row.volume24h)}</span>
-              </div>
+              </Link>
             ))
           : (rows as Array<Record<string, unknown>>).map((row, i) => {
               const address = row.address as string;
